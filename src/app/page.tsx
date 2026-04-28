@@ -6,6 +6,15 @@ type JarName = "caveats" | "good_girl";
 type UserName = "Lily" | "Jana" | "Vaidehi";
 const USERS: UserName[] = ["Lily", "Jana", "Vaidehi"];
 
+type Suggestion = {
+  id: number;
+  jar_name: JarName;
+  suggestion: string;
+  suggested_by: string | null;
+  created_at: string;
+  voters: string[];
+};
+
 const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: string }> = {
   caveats: {
     label: "Caveats / Apology Jar",
@@ -202,6 +211,174 @@ function Jar({
   );
 }
 
+function SuggestionsPanel({
+  jar,
+  suggestions,
+  activeUser,
+  onAdd,
+  onToggleVote,
+}: {
+  jar: JarName;
+  suggestions: Suggestion[];
+  activeUser: UserName | null;
+  onAdd: (text: string) => Promise<void>;
+  onToggleVote: (id: number) => Promise<void>;
+}) {
+  const config = JAR_CONFIG[jar];
+  const [draft, setDraft] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sorted = [...suggestions].sort((a, b) => {
+    if (b.voters.length !== a.voters.length) {
+      return b.voters.length - a.voters.length;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeUser) return;
+    const text = draft.trim();
+    if (!text) return;
+    if (text.length > 80) {
+      setError("Keep it under 80 characters");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onAdd(text);
+      setDraft("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to suggest");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="w-[280px] rounded-2xl px-4 py-4 flex flex-col gap-3"
+      style={{
+        background: "var(--bg-secondary)",
+        border: `1px solid ${config.fillColor}`,
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className="text-[11px] uppercase tracking-wider font-semibold"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Where should it go?
+        </span>
+        <span
+          className="text-[10px] tabular-nums"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {sorted.length} {sorted.length === 1 ? "idea" : "ideas"}
+        </span>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div
+          className="text-xs italic py-2"
+          style={{ color: "var(--text-muted)" }}
+        >
+          No suggestions yet. Be first.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {sorted.map((s) => {
+            const voted = activeUser ? s.voters.includes(activeUser) : false;
+            return (
+              <li
+                key={s.id}
+                className="flex items-start gap-2 text-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => activeUser && onToggleVote(s.id)}
+                  disabled={!activeUser}
+                  aria-label={voted ? "Remove your vote" : "Vote for this"}
+                  className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums transition-all"
+                  style={{
+                    background: voted ? config.color : "var(--bg)",
+                    color: voted ? "white" : config.color,
+                    border: `1px solid ${config.color}`,
+                    opacity: activeUser ? 1 : 0.4,
+                    cursor: activeUser ? "pointer" : "not-allowed",
+                  }}
+                >
+                  <span>{voted ? "♥" : "♡"}</span>
+                  <span>{s.voters.length}</span>
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="leading-snug break-words"
+                    style={{ color: "var(--text)" }}
+                  >
+                    {s.suggestion}
+                  </div>
+                  {s.suggested_by && (
+                    <div
+                      className="text-[10px] mt-0.5"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      — {s.suggested_by}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex gap-1.5 mt-1">
+        <input
+          type="text"
+          value={draft}
+          maxLength={80}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (error) setError(null);
+          }}
+          disabled={!activeUser || submitting}
+          placeholder={activeUser ? "Suggest a place…" : "Pick a name first"}
+          className="flex-1 min-w-0 rounded-full px-3 py-1.5 text-xs outline-none"
+          style={{
+            background: "var(--bg)",
+            color: "var(--text)",
+            border: `1px solid ${config.fillColor}`,
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!activeUser || submitting || !draft.trim()}
+          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all"
+          style={{
+            background: config.color,
+            color: "white",
+            opacity: !activeUser || submitting || !draft.trim() ? 0.4 : 1,
+            cursor:
+              !activeUser || submitting || !draft.trim()
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          + add
+        </button>
+      </form>
+      {error && (
+        <div className="text-[11px]" style={{ color: config.color }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ThemeToggle() {
   const [theme, setTheme] = useState("light");
 
@@ -279,6 +456,7 @@ export default function Home() {
     caveats: 0,
     good_girl: 0,
   });
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeUser, setActiveUser] = useState<UserName | null>(null);
 
@@ -296,9 +474,18 @@ export default function Home() {
     setLoading(false);
   }, []);
 
+  const fetchSuggestions = useCallback(async () => {
+    const res = await fetch("/api/suggestions");
+    if (res.ok) {
+      const data = await res.json();
+      setSuggestions(data.suggestions ?? []);
+    }
+  }, []);
+
   useEffect(() => {
     fetchTotals();
-  }, [fetchTotals]);
+    fetchSuggestions();
+  }, [fetchTotals, fetchSuggestions]);
 
   const selectUser = (name: UserName) => {
     setActiveUser(name);
@@ -314,6 +501,48 @@ export default function Home() {
       body: JSON.stringify({ jar_name: jar, amount: 1, added_by: activeUser }),
     });
     fetchTotals();
+  };
+
+  const addSuggestion = async (jar: JarName, text: string) => {
+    if (!activeUser) return;
+    const res = await fetch("/api/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jar_name: jar,
+        suggestion: text,
+        suggested_by: activeUser,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error ?? "Failed to suggest");
+    }
+    fetchSuggestions();
+  };
+
+  const toggleVote = async (id: number) => {
+    if (!activeUser) return;
+    setSuggestions((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        const has = s.voters.includes(activeUser);
+        return {
+          ...s,
+          voters: has
+            ? s.voters.filter((v) => v !== activeUser)
+            : [...s.voters, activeUser],
+        };
+      })
+    );
+    const res = await fetch("/api/suggestions/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suggestion_id: id, voter: activeUser }),
+    });
+    if (!res.ok) {
+      fetchSuggestions();
+    }
   };
 
   const resetJar = async (jar: JarName) => {
@@ -366,20 +595,42 @@ export default function Home() {
 
       <div
         className="flex flex-col sm:flex-row items-center sm:items-start gap-16"
-        style={{ opacity: activeUser ? 1 : 0.4, pointerEvents: activeUser ? "auto" : "none" }}
+        style={{ opacity: activeUser ? 1 : 0.4 }}
       >
-        <Jar
-          name="caveats"
-          total={totals.caveats}
-          onAdd={() => addToJar("caveats")}
-          onReset={() => resetJar("caveats")}
-        />
-        <Jar
-          name="good_girl"
-          total={totals.good_girl}
-          onAdd={() => addToJar("good_girl")}
-          onReset={() => resetJar("good_girl")}
-        />
+        <div className="flex flex-col items-center gap-6">
+          <div style={{ pointerEvents: activeUser ? "auto" : "none" }}>
+            <Jar
+              name="caveats"
+              total={totals.caveats}
+              onAdd={() => addToJar("caveats")}
+              onReset={() => resetJar("caveats")}
+            />
+          </div>
+          <SuggestionsPanel
+            jar="caveats"
+            suggestions={suggestions.filter((s) => s.jar_name === "caveats")}
+            activeUser={activeUser}
+            onAdd={(text) => addSuggestion("caveats", text)}
+            onToggleVote={(id) => toggleVote(id)}
+          />
+        </div>
+        <div className="flex flex-col items-center gap-6">
+          <div style={{ pointerEvents: activeUser ? "auto" : "none" }}>
+            <Jar
+              name="good_girl"
+              total={totals.good_girl}
+              onAdd={() => addToJar("good_girl")}
+              onReset={() => resetJar("good_girl")}
+            />
+          </div>
+          <SuggestionsPanel
+            jar="good_girl"
+            suggestions={suggestions.filter((s) => s.jar_name === "good_girl")}
+            activeUser={activeUser}
+            onAdd={(text) => addSuggestion("good_girl", text)}
+            onToggleVote={(id) => toggleVote(id)}
+          />
+        </div>
       </div>
     </main>
   );
