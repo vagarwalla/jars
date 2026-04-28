@@ -13,6 +13,23 @@
   --jar-lid: #1a1714;
   --jar-lid-dark: #000000;
   --shadow: rgba(0, 0, 0, 0.12);
+  /* Greenback dollar bill palette */
+  --bill-bg: #b6c9a8;
+  --bill-bg-edge: #95ad88;
+  --bill-border: #4a6b3e;
+  --bill-text: #2a3a22;
+  --bill-portrait: rgba(74, 107, 62, 0.22);
+  --bill-portrait-face: #5e7250;
+  --bill-crease: rgba(40, 60, 30, 0.32);
+  --bill-crease-strong: rgba(30, 45, 22, 0.55);
+  --bill-highlight: rgba(255, 255, 255, 0.35);
+  --bill-shadow: rgba(0, 0, 0, 0.18);
+  /* Rolled-bill stripe (darker edge of rolled paper) */
+  --bill-roll-stripe: rgba(40, 60, 30, 0.45);
+  /* Per-bill stacking drop shadow (cast onto the bill below) */
+  --bill-stack-shadow: 0 2px 3px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
+  /* Inner-jar floor shadow (atmospheric pile depth) */
+  --jar-floor-shadow: radial-gradient(ellipse at center bottom, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0.12) 35%, transparent 70%);
 }
 
 [data-theme="dark"] {
@@ -28,6 +45,22 @@
   --jar-lid: #f3ead8;
   --jar-lid-dark: #b8a888;
   --shadow: rgba(0, 0, 0, 0.4);
+  /* Greenback palette - muted for dark mode */
+  --bill-bg: #8a9e7e;
+  --bill-bg-edge: #6c805f;
+  --bill-border: #2a3a22;
+  --bill-text: #14180e;
+  --bill-portrait: rgba(20, 30, 14, 0.32);
+  --bill-portrait-face: #3a4a30;
+  --bill-crease: rgba(10, 18, 6, 0.45);
+  --bill-crease-strong: rgba(0, 6, 0, 0.7);
+  --bill-highlight: rgba(255, 255, 255, 0.18);
+  --bill-shadow: rgba(0, 0, 0, 0.4);
+  --bill-roll-stripe: rgba(0, 8, 0, 0.6);
+  /* Per-bill stacking drop shadow — stronger in dark mode for legibility */
+  --bill-stack-shadow: 0 2px 4px rgba(0, 0, 0, 0.55), 0 1px 1px rgba(0, 0, 0, 0.35);
+  /* Inner-jar floor shadow */
+  --jar-floor-shadow: radial-gradient(ellipse at center bottom, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 35%, transparent 70%);
 }
 
 @theme inline {
@@ -50,4 +83,36 @@ body {
   color: var(--text);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-weight: 500;
+}
+
+/* Newest-bill drop animation. The bill starts above the jar with a slight extra
+   rotation, fades up to full opacity, lands just past its resting spot, and
+   settles. The end-frame transform must match the static resting transform
+   so the animation lands cleanly. */
+@keyframes bill-drop {
+  0% {
+    transform: translate(-50%, calc(-1 * (var(--jar-height, 220px) + 60px)))
+      var(--bill-3d-tilt, )
+      rotate(calc(var(--bill-end-rot, 0deg) - 30deg));
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  75% {
+    transform: translate(-50%, 3px)
+      var(--bill-3d-tilt, )
+      rotate(var(--bill-end-rot, 0deg));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, 0)
+      var(--bill-3d-tilt, )
+      rotate(var(--bill-end-rot, 0deg));
+    opacity: 1;
+  }
+}
+
+.bill-falling {
+  animation: bill-drop 300ms cubic-bezier(0.45, 0.05, 0.55, 0.95) both;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 type JarName = "caveats" | "good_girl";
 
@@ -62,7 +62,12 @@ function renderWithLinks(text: string): React.ReactNode[] {
 
 const JAR_CONFIG: Record<
   JarName,
-  { label: string; color: string; fillColor: string; destination: string }
+  {
+    label: string;
+    color: string;
+    fillColor: string;
+    destination: string;
+  }
 > = {
   caveats: {
     label: "Caveats / Apology Jar",
@@ -77,6 +82,595 @@ const JAR_CONFIG: Record<
     destination: "→ Gals Night Out",
   },
 };
+
+type BillVariant =
+  | "crisp"
+  | "foldedH"
+  | "foldedV"
+  | "crumpled"
+  | "rolled"
+  | "tilted"
+  | "flipped";
+
+function pickVariant(index: number): BillVariant {
+  // Deterministic mapping based on index % 13. Distribution per 13 bills:
+  // 6 crisp, 2 foldedH, 2 foldedV, 1 crumpled, 1 rolled, 1 tilted, 1 flipped.
+  // Most bills are crisp or lightly folded, with occasional rolls and tilts.
+  switch (index % 13) {
+    case 1:
+      return "foldedH";
+    case 2:
+      return "foldedV";
+    case 3:
+      return "crumpled";
+    case 5:
+      return "rolled";
+    case 6:
+      return "foldedH";
+    case 7:
+      return "tilted";
+    case 9:
+      return "foldedV";
+    case 11:
+      return "flipped";
+    default:
+      // 0, 4, 8, 10, 12 → crisp
+      return "crisp";
+  }
+}
+
+// Per-variant vertical stack step (px). Sum over 13:
+// 6×2 + 2×2 + 2×1 + 1×2 + 1×4 + 1×2 + 1×2 = 12 + 4 + 2 + 2 + 4 + 2 + 2 = 28
+// → ~215px for 100 bills, fits within the 220px interior with overflow-hidden.
+function variantStep(variant: BillVariant): number {
+  switch (variant) {
+    case "rolled":
+      return 4; // tall cylinder protrudes
+    case "tilted":
+    case "flipped":
+      return 2;
+    case "foldedV":
+      return 1; // narrow + sits low
+    case "foldedH":
+    case "crumpled":
+    case "crisp":
+    default:
+      return 2;
+  }
+}
+
+// Lane-based horizontal anchor: spread bills across left/center/right of the jar.
+// Returns the bill's horizontal center offset (px) from the jar's vertical center axis.
+// Narrower variants (foldedV, rolled) can extend further without clipping.
+function laneAnchor(variant: BillVariant, index: number): number {
+  const lane = (index * 11) % 3; // 0=left, 1=center, 2=right
+  const isNarrow = variant === "foldedV" || variant === "rolled";
+  const offset = isNarrow ? 25 : 18;
+  const base = lane === 0 ? -offset : lane === 1 ? 0 : offset;
+  const jitter = ((index * 13) % 9) - 4; // -4..+4 px
+  return base + jitter;
+}
+
+function BillFace({
+  width,
+  height,
+  compact = false,
+}: {
+  width: number;
+  height: number;
+  compact?: boolean;
+}) {
+  // Inner content of a bill — used by every variant.
+  const showLabel = !compact && height >= 26;
+  const portraitSize = Math.round(height * 0.55);
+  const showSilhouette = !compact && portraitSize >= 12 && width >= 40;
+  return (
+    <>
+      {/* Inner thin frame */}
+      <div
+        className="absolute"
+        style={{
+          inset: "2px",
+          border: `1px solid var(--bill-border)`,
+          borderRadius: "2px",
+          opacity: 0.55,
+        }}
+      />
+      {/* Subtle filigree dots */}
+      <div
+        className="absolute"
+        style={{
+          top: "1px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "10px",
+          height: "1px",
+          background: "var(--bill-border)",
+          opacity: 0.25,
+          borderRadius: "1px",
+        }}
+      />
+      <div
+        className="absolute"
+        style={{
+          bottom: "1px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "10px",
+          height: "1px",
+          background: "var(--bill-border)",
+          opacity: 0.25,
+          borderRadius: "1px",
+        }}
+      />
+      {/* Portrait oval, center-left — with George Washington silhouette */}
+      <div
+        className="absolute rounded-full overflow-hidden"
+        style={{
+          left: `${Math.round(width * 0.18)}px`,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: `${portraitSize}px`,
+          height: `${portraitSize}px`,
+          background: "var(--bill-portrait)",
+          border: `1px solid var(--bill-border)`,
+          opacity: 0.85,
+        }}
+      >
+        {showSilhouette && (
+          <svg
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "55%",
+              transform: "translate(-50%, -50%)",
+              width: "100%",
+              height: "100%",
+              color: "var(--bill-portrait-face)",
+              opacity: 0.9,
+            }}
+            aria-hidden="true"
+          >
+            {/* Stylized GW profile facing left:
+                puffy wig at back/top, pointed nose forward (left),
+                jaw + chin, neck/shoulders.  */}
+            <path
+              d="M7.5 6.2
+                 C 8.2 4.4, 10 3.4, 12 3.6
+                 C 14.6 3.8, 16.6 5.4, 17.2 7.6
+                 C 17.8 7.6, 18.4 8.2, 18.4 9.2
+                 C 18.4 10.2, 17.9 10.9, 17.2 11.0
+                 C 17.0 11.9, 16.4 12.7, 15.6 13.2
+                 L 14.4 13.2
+                 C 13.4 13.6, 12.0 13.7, 10.6 13.5
+                 C 9.4 14.2, 8.4 14.4, 7.4 14.0
+                 C 6.0 13.6, 5.0 12.4, 4.6 11.0
+                 C 4.0 10.4, 3.8 9.4, 4.2 8.6
+                 C 4.6 7.8, 5.4 7.4, 6.2 7.4
+                 C 6.4 6.9, 6.9 6.4, 7.5 6.2 Z
+                 M 6.4 14.6
+                 C 7.6 15.4, 9.4 15.8, 11.4 15.6
+                 C 13.6 15.4, 15.6 14.8, 16.8 14.0
+                 C 17.6 14.6, 18.4 15.4, 19.0 16.4
+                 C 19.8 17.6, 20.2 19.0, 20.4 20.4
+                 L 20.4 22
+                 L 3.6 22
+                 L 3.6 20.4
+                 C 3.8 19.0, 4.2 17.6, 5.0 16.4
+                 C 5.4 15.7, 5.9 15.1, 6.4 14.6 Z"
+              fill="currentColor"
+            />
+          </svg>
+        )}
+      </div>
+      {/* Corner numerals */}
+      {[
+        { top: "2px", left: "4px" },
+        { top: "2px", right: "4px" },
+        { bottom: "2px", left: "4px" },
+        { bottom: "2px", right: "4px" },
+      ].map((pos, i) => (
+        <div
+          key={i}
+          className="absolute font-bold leading-none"
+          style={{
+            ...pos,
+            fontSize: "6px",
+            color: "var(--bill-text)",
+            opacity: 0.8,
+            fontFamily: "Georgia, serif",
+          }}
+        >
+          1
+        </div>
+      ))}
+      {/* "ONE" tiny caps top */}
+      {showLabel && (
+        <div
+          className="absolute leading-none"
+          style={{
+            top: "4px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: "5px",
+            letterSpacing: "1.2px",
+            color: "var(--bill-text)",
+            opacity: 0.7,
+            fontFamily: "Georgia, serif",
+            textTransform: "uppercase",
+          }}
+        >
+          One
+        </div>
+      )}
+      {/* Center $1 — offset right of the portrait */}
+      <span
+        className="absolute font-bold leading-none"
+        style={{
+          left: `${Math.round(width * 0.62)}px`,
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          fontSize: compact ? "10px" : "12px",
+          color: "var(--bill-text)",
+          fontFamily: "Georgia, serif",
+          letterSpacing: "0.5px",
+          textShadow: "0 0 1px rgba(255,255,255,0.35)",
+        }}
+      >
+        $1
+      </span>
+      {/* "ONE DOLLAR" tiny caps bottom */}
+      {showLabel && (
+        <div
+          className="absolute leading-none"
+          style={{
+            bottom: "4px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: "4.5px",
+            letterSpacing: "1.4px",
+            color: "var(--bill-text)",
+            opacity: 0.65,
+            fontFamily: "Georgia, serif",
+            textTransform: "uppercase",
+          }}
+        >
+          One Dollar
+        </div>
+      )}
+    </>
+  );
+}
+
+function DollarBill({
+  index,
+  variant,
+  bottom,
+  isFalling = false,
+}: {
+  index: number;
+  variant: BillVariant;
+  bottom: number;
+  isFalling?: boolean;
+}) {
+  // Deterministic pseudo-random offsets based on index.
+  const baseRotation = ((index * 17) % 11) - 5; // -5 to +5 deg
+  // Wider lane-based horizontal anchor: bills land in left/center/right of the jar.
+  const jitterX = laneAnchor(variant, index);
+
+  // Real US-bill aspect ~2.35:1. Default 75x32 (~2.34:1).
+  const baseW = 75;
+  const baseH = 32;
+
+  // 3D perspective tilt: every bill leans back slightly (rotateX) and
+  // bills in the left/right lanes angle toward the center (rotateY).
+  // Determined by lane (matches laneAnchor).
+  const lane = (index * 11) % 3;
+  const yTilt = lane === 0 ? -3 : lane === 2 ? 3 : 0;
+  const tilt3d = `rotateX(2deg) rotateY(${yTilt}deg)`;
+
+  // Atmospheric depth: bills deep in the pile look slightly dimmer.
+  const brightness = (0.92 + (index / 100) * 0.08).toFixed(3);
+
+  // Stacking drop shadow — paper-on-paper feel, shared across all variants.
+  const stackShadow = "var(--bill-stack-shadow)";
+
+  const sharedShell: React.CSSProperties = {
+    position: "absolute",
+    left: `calc(50% + ${jitterX}px)`,
+    bottom: `${bottom}px`,
+    // The transform here is the resting transform; the falling animation
+    // overrides it via the `bill-falling` class, ending at the same value.
+    transform: `translateX(-50%) ${tilt3d} rotate(${baseRotation}deg)`,
+    transformStyle: "preserve-3d",
+    zIndex: index,
+    filter: `brightness(${brightness})`,
+    // CSS vars consumed by the @keyframes bill-drop animation so the
+    // end-frame transform matches the static resting transform.
+    ["--bill-end-rot" as string]: `${baseRotation}deg`,
+    ["--bill-3d-tilt" as string]: tilt3d,
+  };
+
+  const billSurface: React.CSSProperties = {
+    background: `linear-gradient(135deg, var(--bill-bg) 0%, var(--bill-bg-edge) 100%)`,
+    border: `1px solid var(--bill-border)`,
+    borderRadius: "3px",
+    boxShadow: `${stackShadow}, 0 1px 2px var(--bill-shadow)`,
+  };
+
+  const fallingClass = isFalling ? "bill-falling" : "";
+
+  if (variant === "foldedH") {
+    // Folded along the long axis — short, with strong dark crease and shadow on lower half.
+    const w = baseW; // 75
+    const h = 20;
+    return (
+      <div className={fallingClass} style={{ ...sharedShell, width: `${w}px`, height: `${h}px` }}>
+        <div
+          className="absolute"
+          style={{
+            inset: 0,
+            ...billSurface,
+            overflow: "hidden",
+            boxShadow: `0 2px 3px var(--bill-shadow), inset 0 -2px 3px -1px var(--bill-crease)`,
+          }}
+        >
+          <BillFace width={w} height={h} compact />
+          {/* Strong horizontal crease across middle */}
+          <div
+            className="absolute left-0 right-0"
+            style={{
+              top: "50%",
+              height: "2px",
+              background: "var(--bill-crease-strong)",
+              boxShadow:
+                "0 -1px 0 var(--bill-highlight), 0 2px 2px -1px var(--bill-shadow)",
+            }}
+          />
+          {/* Darken lower half to suggest fold underside */}
+          <div
+            className="absolute left-0 right-0 bottom-0"
+            style={{
+              height: "50%",
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.10), rgba(0,0,0,0.18))",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "foldedV") {
+    // Folded edge-on — narrow (~half width), strong vertical crease.
+    const w = 38;
+    const h = baseH; // 32
+    return (
+      <div className={fallingClass} style={{ ...sharedShell, width: `${w}px`, height: `${h}px` }}>
+        <div
+          className="absolute"
+          style={{
+            inset: 0,
+            ...billSurface,
+            overflow: "hidden",
+            boxShadow: `0 1px 3px var(--bill-shadow), inset -2px 0 3px -1px var(--bill-crease)`,
+          }}
+        >
+          <BillFace width={w} height={h} compact />
+          {/* Strong vertical crease */}
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              left: "50%",
+              width: "2px",
+              background: "var(--bill-crease-strong)",
+              boxShadow:
+                "-1px 0 0 var(--bill-highlight), 2px 0 2px -1px var(--bill-shadow)",
+            }}
+          />
+          {/* Darken right half */}
+          <div
+            className="absolute top-0 bottom-0 right-0"
+            style={{
+              width: "50%",
+              background:
+                "linear-gradient(to right, rgba(0,0,0,0.05), rgba(0,0,0,0.18))",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "crumpled") {
+    // Same rectangle as crisp, but with subtle wrinkle shadows + highlights.
+    const w = baseW;
+    const h = baseH;
+    return (
+      <div className={fallingClass} style={{ ...sharedShell, width: `${w}px`, height: `${h}px` }}>
+        <div
+          className="absolute"
+          style={{
+            inset: 0,
+            ...billSurface,
+            overflow: "hidden",
+            boxShadow: `${stackShadow}, inset 0 0 6px var(--bill-highlight), inset 2px 0 4px -2px var(--bill-crease)`,
+          }}
+        >
+          <BillFace width={w} height={h} />
+          {/* Subtle wrinkle streaks */}
+          <div
+            className="absolute"
+            style={{
+              top: "26%",
+              left: "10%",
+              width: "70%",
+              height: "1px",
+              background: "var(--bill-highlight)",
+              opacity: 0.55,
+              transform: "rotate(-4deg)",
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              top: "62%",
+              left: "18%",
+              width: "60%",
+              height: "1px",
+              background: "var(--bill-crease)",
+              opacity: 0.45,
+              transform: "rotate(3deg)",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "rolled") {
+    // Tightly rolled-up bill — a long thin vertical cylinder/tube.
+    const w = 13;
+    const h = 38;
+    const extraRot = (((index * 13) % 51) - 25); // ±25°
+    const totalRot = baseRotation + extraRot;
+    return (
+      <div
+        className={fallingClass}
+        style={{
+          ...sharedShell,
+          width: `${w}px`,
+          height: `${h}px`,
+          transform: `translateX(-50%) ${tilt3d} rotate(${totalRot}deg)`,
+          filter: `brightness(${brightness}) drop-shadow(0 2px 2px var(--bill-shadow))`,
+          ["--bill-end-rot" as string]: `${totalRot}deg`,
+        }}
+      >
+        <div
+          className="absolute"
+          style={{
+            inset: 0,
+            background:
+              "linear-gradient(to right, var(--bill-bg-edge) 0%, var(--bill-bg) 35%, var(--bill-bg) 65%, var(--bill-bg-edge) 100%)",
+            border: `1px solid var(--bill-border)`,
+            borderRadius: "7px",
+            overflow: "hidden",
+            boxShadow:
+              "inset 2px 0 2px -1px var(--bill-highlight), inset -2px 0 3px -1px var(--bill-roll-stripe)",
+          }}
+        >
+          {/* Darker stripes along the roll suggesting paper edges */}
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              left: "20%",
+              width: "1px",
+              background: "var(--bill-roll-stripe)",
+              opacity: 0.8,
+            }}
+          />
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              left: "55%",
+              width: "1px",
+              background: "var(--bill-roll-stripe)",
+              opacity: 0.6,
+            }}
+          />
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              left: "78%",
+              width: "1px",
+              background: "var(--bill-roll-stripe)",
+              opacity: 0.5,
+            }}
+          />
+          {/* End caps — slightly darker ovals at top and bottom */}
+          <div
+            className="absolute left-0 right-0"
+            style={{
+              top: 0,
+              height: "3px",
+              background: "var(--bill-roll-stripe)",
+              borderRadius: "50% 50% 0 0",
+              opacity: 0.6,
+            }}
+          />
+          <div
+            className="absolute left-0 right-0"
+            style={{
+              bottom: 0,
+              height: "3px",
+              background: "var(--bill-roll-stripe)",
+              borderRadius: "0 0 50% 50%",
+              opacity: 0.6,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "tilted" || variant === "flipped") {
+    // Larger rotation; "flipped" goes upside down.
+    const w = baseW;
+    const h = baseH;
+    const tiltSign = index % 2 === 0 ? 1 : -1;
+    const tiltMag = 30 + ((index * 11) % 16); // 30-45°
+    const extraRot = variant === "flipped" ? 180 : tiltSign * tiltMag;
+    const totalRot = baseRotation + extraRot;
+    return (
+      <div
+        className={fallingClass}
+        style={{
+          ...sharedShell,
+          width: `${w}px`,
+          height: `${h}px`,
+          transform: `translateX(-50%) ${tilt3d} rotate(${totalRot}deg)`,
+          ["--bill-end-rot" as string]: `${totalRot}deg`,
+        }}
+      >
+        <div
+          className="absolute"
+          style={{ inset: 0, ...billSurface, overflow: "hidden" }}
+        >
+          <BillFace width={w} height={h} />
+          {variant === "flipped" && (
+            // Mirror feel: faint horizontal sheen, washed-out content.
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(255,255,255,0.18), rgba(0,0,0,0.10))",
+                mixBlendMode: "overlay",
+              }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Crisp (default) — flat rectangle.
+  const w = baseW;
+  const h = baseH;
+  return (
+    <div className={fallingClass} style={{ ...sharedShell, width: `${w}px`, height: `${h}px` }}>
+      <div
+        className="absolute"
+        style={{ inset: 0, ...billSurface, overflow: "hidden" }}
+      >
+        <BillFace width={w} height={h} />
+      </div>
+    </div>
+  );
+}
 
 function Jar({
   name,
@@ -95,11 +689,28 @@ function Jar({
   const [animate, setAnimate] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  // The newest bill should fall in only after a fresh add — reuse `animate`.
+  const wasJustAdded = animate;
+
+  // Compute per-bill variant + cumulative bottom (deterministic, walks 0..N-1).
+  const billCount = Math.min(total, 100);
+  const bills = useMemo(() => {
+    const out: { variant: BillVariant; bottom: number }[] = [];
+    let cumulative = 0;
+    for (let i = 0; i < billCount; i++) {
+      const variant = pickVariant(i);
+      out.push({ variant, bottom: cumulative });
+      cumulative += variantStep(variant);
+    }
+    return out;
+  }, [billCount]);
 
   const handleClick = () => {
     setAnimate(true);
     onAdd();
-    setTimeout(() => setAnimate(false), 400);
+    // Keep the flag set for the full bill-drop duration (600ms) so the
+    // newest-bill falling animation completes before isFalling flips back.
+    setTimeout(() => setAnimate(false), 650);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -165,34 +776,47 @@ function Jar({
             }}
           />
 
-          {/* Fill level */}
+          {/* Fill level - faint tinted backdrop */}
           <div
-            className="absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out"
+            className="absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out pointer-events-none"
             style={{
               height: `${fillPercent}%`,
               background: config.fillColor,
               borderRadius: "0 0 22px 22px",
             }}
-          >
-            {total > 0 && (
-              <div className="absolute inset-0 overflow-hidden opacity-40">
-                {Array.from({ length: Math.min(total, 30) }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute rounded-full"
-                    style={{
-                      width: `${12 + (i % 3) * 4}px`,
-                      height: `${12 + (i % 3) * 4}px`,
-                      background: config.color,
-                      left: `${10 + ((i * 37) % 80)}%`,
-                      bottom: `${5 + ((i * 23) % 85)}%`,
-                      transform: `translate(-50%, 50%) rotate(${i * 45}deg)`,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          />
+
+          {/* Stacked dollar bills */}
+          {total > 0 && (
+            <div
+              className="absolute bottom-0 left-0 right-0 overflow-hidden"
+              style={{
+                height: "100%",
+                borderRadius: "0 0 22px 22px",
+                perspective: "600px",
+                transformStyle: "preserve-3d",
+              }}
+            >
+              {/* Inner-bottom floor shadow — atmospheric depth under the pile */}
+              <div
+                className="absolute left-0 right-0 bottom-0 pointer-events-none"
+                style={{
+                  height: "40px",
+                  background: "var(--jar-floor-shadow)",
+                  zIndex: 0,
+                }}
+              />
+              {bills.map((b, i) => (
+                <DollarBill
+                  key={i}
+                  index={i}
+                  variant={b.variant}
+                  bottom={b.bottom}
+                  isFalling={i === total - 1 && wasJustAdded}
+                />
+              ))}
+            </div>
+          )}
 
           {animate && (
             <div
