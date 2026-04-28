@@ -439,10 +439,14 @@ function SettingsModal({
   open,
   onClose,
   onUserAdded,
+  suggestions,
+  onSuggestionsChanged,
 }: {
   open: boolean;
   onClose: () => void;
   onUserAdded: (name: string) => void;
+  suggestions: Suggestion[];
+  onSuggestionsChanged: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [unlocked, setUnlocked] = useState(false);
@@ -450,6 +454,8 @@ function SettingsModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -459,8 +465,26 @@ function SettingsModal({
       setError(null);
       setBusy(false);
       setJustAdded(null);
+      setDeletingId(null);
+      setDeleteError(null);
     }
   }, [open]);
+
+  const deleteSuggestion = async (id: number) => {
+    setDeletingId(id);
+    setDeleteError(null);
+    const res = await fetch(`/api/suggestions?id=${id}`, {
+      method: "DELETE",
+      headers: { "x-settings-password": password },
+    });
+    setDeletingId(null);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setDeleteError(j.error ?? `Error (${res.status})`);
+      return;
+    }
+    onSuggestionsChanged();
+  };
 
   if (!open) return null;
 
@@ -526,7 +550,7 @@ function SettingsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl p-6 shadow-xl"
+        className="w-full max-w-md rounded-2xl p-6 shadow-xl"
         style={{ background: "var(--bg)", border: "1px solid var(--jar-glass-border)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -582,45 +606,122 @@ function SettingsModal({
             </button>
           </form>
         ) : (
-          <form onSubmit={submitName} className="flex flex-col gap-3">
-            <label
-              className="text-xs uppercase tracking-wider"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Add a name
-            </label>
-            <input
-              type="text"
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Sam"
-              className="rounded-md px-3 py-2 outline-none"
-              style={{
-                background: "var(--bg-secondary)",
-                color: "var(--text)",
-                border: "1px solid var(--jar-glass-border)",
-              }}
-            />
-            {error && (
-              <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
-                {error}
-              </p>
-            )}
-            {justAdded && !error && (
-              <p className="text-xs" style={{ color: "var(--accent-green)" }}>
-                Added “{justAdded}”. Add another or close.
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={busy || !name.trim()}
-              className="rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
-              style={{ background: "var(--accent-green)", color: "white" }}
-            >
-              {busy ? "Adding..." : "Add"}
-            </button>
-          </form>
+          <div className="flex flex-col gap-6">
+            <form onSubmit={submitName} className="flex flex-col gap-3">
+              <label
+                className="text-xs uppercase tracking-wider"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Add a name
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Sam"
+                className="rounded-md px-3 py-2 outline-none"
+                style={{
+                  background: "var(--bg-secondary)",
+                  color: "var(--text)",
+                  border: "1px solid var(--jar-glass-border)",
+                }}
+              />
+              {error && (
+                <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
+                  {error}
+                </p>
+              )}
+              {justAdded && !error && (
+                <p className="text-xs" style={{ color: "var(--accent-green)" }}>
+                  Added “{justAdded}”. Add another or close.
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={busy || !name.trim()}
+                className="rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+                style={{ background: "var(--accent-green)", color: "white" }}
+              >
+                {busy ? "Adding..." : "Add"}
+              </button>
+            </form>
+
+            <div className="flex flex-col gap-2">
+              <label
+                className="text-xs uppercase tracking-wider"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Manage suggestions
+              </label>
+              {suggestions.length === 0 ? (
+                <p
+                  className="text-xs italic"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  No suggestions yet.
+                </p>
+              ) : (
+                <ul
+                  className="flex flex-col divide-y max-h-64 overflow-y-auto rounded-md"
+                  style={{
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--jar-glass-border)",
+                  }}
+                >
+                  {suggestions.map((s) => {
+                    const jarColor = JAR_CONFIG[s.jar_name].color;
+                    const isDeleting = deletingId === s.id;
+                    return (
+                      <li
+                        key={s.id}
+                        className="flex items-center gap-2 px-3 py-2 text-sm"
+                      >
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-bold shrink-0"
+                          style={{ color: jarColor }}
+                        >
+                          {s.jar_name === "caveats" ? "Caveats" : "Good Girl"}
+                        </span>
+                        <span
+                          className="flex-1 min-w-0 truncate"
+                          style={{ color: "var(--text)" }}
+                          title={s.suggestion}
+                        >
+                          {s.suggestion}
+                        </span>
+                        <span
+                          className="text-[11px] tabular-nums shrink-0"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          {s.voters.length} ♥
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteSuggestion(s.id)}
+                          disabled={isDeleting}
+                          aria-label={`Delete suggestion: ${s.suggestion}`}
+                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
+                          style={{
+                            background: "var(--bg)",
+                            color: "var(--accent-pink)",
+                            border: `1px solid ${JAR_CONFIG.caveats.fillColor}`,
+                          }}
+                        >
+                          {isDeleting ? "…" : "×"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {deleteError && (
+                <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
+                  {deleteError}
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -801,6 +902,8 @@ export default function Home() {
         onUserAdded={() => {
           fetchUsers();
         }}
+        suggestions={suggestions}
+        onSuggestionsChanged={fetchSuggestions}
       />
 
       <h1
