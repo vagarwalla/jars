@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-28 — Clickable links + edit suggestions in settings
+- URLs in the public suggestions list now render as clickable links (open in new tab)
+- Password-gated suggestion management modal now supports editing the text in addition to deleting
+- New `PATCH /api/suggestions` (gated by `SETTINGS_PASSWORD` header) updates the suggestion text
+
 ## 2026-04-28 — Rename "Good Girl Jar" to "Boss Bitch Jar"
 - Display label only; internal `good_girl` key preserved so existing rows in `jar_additions` and `jar_suggestions` keep working
 

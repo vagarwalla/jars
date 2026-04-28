@@ -84,6 +84,46 @@ export async function POST(request: Request) {
   return Response.json({ success: true, id: data.id });
 }
 
+export async function PATCH(request: Request) {
+  const expected = process.env.SETTINGS_PASSWORD;
+  if (!expected) {
+    return Response.json(
+      { error: "Settings password not configured" },
+      { status: 500 }
+    );
+  }
+
+  const password = request.headers.get("x-settings-password");
+  if (password !== expected) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const id = Number(body?.id);
+  const rawSuggestion = typeof body?.suggestion === "string" ? body.suggestion.trim() : "";
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return Response.json({ error: "Invalid id" }, { status: 400 });
+  }
+  if (!rawSuggestion || !SUGGESTION_PATTERN.test(rawSuggestion)) {
+    return Response.json(
+      { error: "Suggestion must be 1–80 characters" },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("jar_suggestions")
+    .update({ suggestion: rawSuggestion })
+    .eq("id", id);
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+
+  return Response.json({ success: true });
+}
+
 export async function DELETE(request: Request) {
   const expected = process.env.SETTINGS_PASSWORD;
   if (!expected) {

@@ -13,6 +13,46 @@ type Suggestion = {
   voters: string[];
 };
 
+function renderWithLinks(text: string): React.ReactNode[] {
+  const regex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const trailingPunct = /[.,;:!?)\]}'"]+$/;
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(text)) !== null) {
+    let url = match[0];
+    let trailing = "";
+    const m = url.match(trailingPunct);
+    if (m) {
+      trailing = m[0];
+      url = url.slice(0, url.length - trailing.length);
+    }
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const href = url.toLowerCase().startsWith("www.") ? `https://${url}` : url;
+    nodes.push(
+      <a
+        key={key++}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>
+    );
+    if (trailing) nodes.push(trailing);
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes.length ? nodes : [text];
+}
+
 const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: string }> = {
   caveats: {
     label: "Caveats / Apology Jar",
@@ -316,7 +356,7 @@ function SuggestionsPanel({
                     className="leading-snug break-words"
                     style={{ color: "var(--text)" }}
                   >
-                    {s.suggestion}
+                    {renderWithLinks(s.suggestion)}
                   </div>
                   {s.suggested_by && (
                     <div
@@ -455,7 +495,10 @@ function SettingsModal({
   const [busy, setBusy] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -466,13 +509,16 @@ function SettingsModal({
       setBusy(false);
       setJustAdded(null);
       setDeletingId(null);
-      setDeleteError(null);
+      setManageError(null);
+      setEditingId(null);
+      setEditDraft("");
+      setSavingEdit(false);
     }
   }, [open]);
 
   const deleteSuggestion = async (id: number) => {
     setDeletingId(id);
-    setDeleteError(null);
+    setManageError(null);
     const res = await fetch(`/api/suggestions?id=${id}`, {
       method: "DELETE",
       headers: { "x-settings-password": password },
@@ -480,9 +526,47 @@ function SettingsModal({
     setDeletingId(null);
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      setDeleteError(j.error ?? `Error (${res.status})`);
+      setManageError(j.error ?? `Error (${res.status})`);
       return;
     }
+    onSuggestionsChanged();
+  };
+
+  const startEdit = (s: Suggestion) => {
+    setEditingId(s.id);
+    setEditDraft(s.suggestion);
+    setManageError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async (id: number) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed) {
+      setManageError("Suggestion can't be empty");
+      return;
+    }
+    setSavingEdit(true);
+    setManageError(null);
+    const res = await fetch(`/api/suggestions`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-settings-password": password,
+      },
+      body: JSON.stringify({ id, suggestion: trimmed }),
+    });
+    setSavingEdit(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setManageError(j.error ?? `Error (${res.status})`);
+      return;
+    }
+    setEditingId(null);
+    setEditDraft("");
     onSuggestionsChanged();
   };
 
@@ -672,6 +756,7 @@ function SettingsModal({
                   {suggestions.map((s) => {
                     const jarColor = JAR_CONFIG[s.jar_name].color;
                     const isDeleting = deletingId === s.id;
+                    const isEditing = editingId === s.id;
                     return (
                       <li
                         key={s.id}
@@ -683,41 +768,118 @@ function SettingsModal({
                         >
                           {JAR_CONFIG[s.jar_name].label.replace(/\s*Jar$/, "")}
                         </span>
-                        <span
-                          className="flex-1 min-w-0 truncate"
-                          style={{ color: "var(--text)" }}
-                          title={s.suggestion}
-                        >
-                          {s.suggestion}
-                        </span>
-                        <span
-                          className="text-[11px] tabular-nums shrink-0"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {s.voters.length} ♥
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => deleteSuggestion(s.id)}
-                          disabled={isDeleting}
-                          aria-label={`Delete suggestion: ${s.suggestion}`}
-                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
-                          style={{
-                            background: "var(--bg)",
-                            color: "var(--accent-pink)",
-                            border: `1px solid ${JAR_CONFIG.caveats.fillColor}`,
-                          }}
-                        >
-                          {isDeleting ? "…" : "×"}
-                        </button>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editDraft}
+                            maxLength={80}
+                            disabled={savingEdit}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                saveEdit(s.id);
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelEdit();
+                              }
+                            }}
+                            className="flex-1 min-w-0 rounded-md px-2 py-1 text-sm outline-none"
+                            style={{
+                              background: "var(--bg)",
+                              color: "var(--text)",
+                              border: `1px solid ${jarColor}`,
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="flex-1 min-w-0 truncate"
+                            style={{ color: "var(--text)" }}
+                            title={s.suggestion}
+                          >
+                            {s.suggestion}
+                          </span>
+                        )}
+                        {!isEditing && (
+                          <span
+                            className="text-[11px] tabular-nums shrink-0"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {s.voters.length} ♥
+                          </span>
+                        )}
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(s.id)}
+                              disabled={savingEdit || !editDraft.trim()}
+                              aria-label="Save edit"
+                              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
+                              style={{
+                                background: "var(--bg)",
+                                color: "var(--accent-green)",
+                                border: `1px solid ${JAR_CONFIG.good_girl.fillColor}`,
+                              }}
+                            >
+                              {savingEdit ? "…" : "✓"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              disabled={savingEdit}
+                              aria-label="Cancel edit"
+                              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
+                              style={{
+                                background: "var(--bg)",
+                                color: "var(--text-muted)",
+                                border: "1px solid var(--jar-glass-border)",
+                              }}
+                            >
+                              ×
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(s)}
+                              disabled={isDeleting || editingId !== null}
+                              aria-label={`Edit suggestion: ${s.suggestion}`}
+                              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-xs leading-none transition-opacity disabled:opacity-50"
+                              style={{
+                                background: "var(--bg)",
+                                color: "var(--text-muted)",
+                                border: "1px solid var(--jar-glass-border)",
+                              }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteSuggestion(s.id)}
+                              disabled={isDeleting || editingId !== null}
+                              aria-label={`Delete suggestion: ${s.suggestion}`}
+                              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
+                              style={{
+                                background: "var(--bg)",
+                                color: "var(--accent-pink)",
+                                border: `1px solid ${JAR_CONFIG.caveats.fillColor}`,
+                              }}
+                            >
+                              {isDeleting ? "…" : "×"}
+                            </button>
+                          </>
+                        )}
                       </li>
                     );
                   })}
                 </ul>
               )}
-              {deleteError && (
+              {manageError && (
                 <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
-                  {deleteError}
+                  {manageError}
                 </p>
               )}
             </div>
