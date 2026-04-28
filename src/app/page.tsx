@@ -10,12 +10,12 @@ const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: str
   caveats: {
     label: "Caveats / Apology Jar",
     color: "var(--accent-pink)",
-    fillColor: "rgba(232, 160, 191, 0.5)",
+    fillColor: "rgba(255, 107, 61, 0.55)",
   },
   good_girl: {
     label: "Good Girl Jar",
     color: "var(--accent-green)",
-    fillColor: "rgba(168, 213, 186, 0.5)",
+    fillColor: "rgba(16, 196, 168, 0.55)",
   },
 };
 
@@ -51,7 +51,7 @@ function Jar({
   return (
     <div className="flex flex-col items-center gap-4">
       <h2
-        className="text-lg font-medium tracking-wide"
+        className="text-xl font-bold tracking-tight"
         style={{ color: config.color }}
       >
         {config.label}
@@ -181,7 +181,7 @@ function Jar({
 
       <div className="text-center">
         <span
-          className="text-3xl font-semibold tabular-nums"
+          className="text-4xl font-bold tabular-nums"
           style={{ color: config.color }}
         >
           ${total}
@@ -257,11 +257,11 @@ function UserSelector({
         <button
           key={name}
           onClick={() => onSelect(name)}
-          className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+          className="px-4 py-2 rounded-full text-sm font-bold transition-all"
           style={{
             background:
-              selected === name ? "var(--accent-pink)" : "var(--bg-secondary)",
-            color: selected === name ? "white" : "var(--text-muted)",
+              selected === name ? "var(--accent-violet)" : "var(--bg-secondary)",
+            color: selected === name ? "white" : "var(--text)",
             boxShadow:
               selected === name ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
             transform: selected === name ? "scale(1.05)" : "scale(1)",
@@ -348,16 +348,16 @@ export default function Home() {
       <ThemeToggle />
 
       <h1
-        className="text-2xl font-light tracking-widest uppercase"
-        style={{ color: "var(--text-muted)" }}
+        className="text-4xl font-bold tracking-tight uppercase"
+        style={{ color: "var(--text)" }}
       >
         The Jars
       </h1>
 
       <div className="flex flex-col items-center gap-2">
         <span
-          className="text-xs uppercase tracking-wider"
-          style={{ color: "var(--text-muted)" }}
+          className="text-xs font-bold uppercase tracking-widest"
+          style={{ color: "var(--text)" }}
         >
           Who did it?
         </span>
