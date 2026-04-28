@@ -328,7 +328,7 @@ export default function Home() {
           className="text-xs uppercase tracking-wider"
           style={{ color: "var(--text-muted)" }}
         >
-          Who&apos;s adding?
+          Who did it?
         </span>
         <UserSelector selected={activeUser} onSelect={selectUser} />
       </div>
