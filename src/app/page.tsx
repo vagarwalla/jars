@@ -85,6 +85,7 @@ const JAR_CONFIG: Record<
 
 type BillVariant =
   | "crisp"
+  | "halfFolded"
   | "foldedH"
   | "foldedV"
   | "crumpled"
@@ -94,34 +95,36 @@ type BillVariant =
 
 function pickVariant(index: number): BillVariant {
   // Deterministic mapping based on index % 13. Distribution per 13 bills:
-  // 6 crisp, 2 foldedH, 2 foldedV, 1 crumpled, 1 rolled, 1 tilted, 1 flipped.
-  // Most bills are crisp or lightly folded, with occasional rolls and tilts.
+  // 4 crisp, 3 halfFolded, 1 foldedH, 1 foldedV, 1 crumpled, 1 rolled, 1 tilted, 1 flipped.
+  // Half-folded ("folded in 2") is the most common non-flat variant.
   switch (index % 13) {
     case 1:
-      return "foldedH";
+      return "halfFolded";
     case 2:
-      return "foldedV";
+      return "foldedH";
     case 3:
       return "crumpled";
     case 5:
       return "rolled";
     case 6:
-      return "foldedH";
+      return "halfFolded";
     case 7:
       return "tilted";
+    case 8:
+      return "halfFolded";
     case 9:
       return "foldedV";
     case 11:
       return "flipped";
     default:
-      // 0, 4, 8, 10, 12 → crisp
+      // 0, 4, 10, 12 → crisp
       return "crisp";
   }
 }
 
 // Per-variant vertical stack step (px). Sum over 13:
-// 6×2 + 2×2 + 2×1 + 1×2 + 1×4 + 1×2 + 1×2 = 12 + 4 + 2 + 2 + 4 + 2 + 2 = 28
-// → ~215px for 100 bills, fits within the 220px interior with overflow-hidden.
+// 4×2 + 3×2 + 1×2 + 1×1 + 1×2 + 1×4 + 1×2 + 1×2 = 8 + 6 + 2 + 1 + 2 + 4 + 2 + 2 = 27
+// → ~208px for 100 bills, fits within the 220px interior with overflow-hidden.
 function variantStep(variant: BillVariant): number {
   switch (variant) {
     case "rolled":
@@ -132,6 +135,7 @@ function variantStep(variant: BillVariant): number {
     case "foldedV":
       return 1; // narrow + sits low
     case "foldedH":
+    case "halfFolded":
     case "crumpled":
     case "crisp":
     default:
@@ -141,10 +145,11 @@ function variantStep(variant: BillVariant): number {
 
 // Lane-based horizontal anchor: spread bills across left/center/right of the jar.
 // Returns the bill's horizontal center offset (px) from the jar's vertical center axis.
-// Narrower variants (foldedV, rolled) can extend further without clipping.
+// Narrower variants (foldedV, halfFolded, rolled) can extend further without clipping.
 function laneAnchor(variant: BillVariant, index: number): number {
   const lane = (index * 11) % 3; // 0=left, 1=center, 2=right
-  const isNarrow = variant === "foldedV" || variant === "rolled";
+  const isNarrow =
+    variant === "foldedV" || variant === "halfFolded" || variant === "rolled";
   const offset = isNarrow ? 25 : 18;
   const base = lane === 0 ? -offset : lane === 1 ? 0 : offset;
   const jitter = ((index * 13) % 9) - 4; // -4..+4 px
@@ -402,6 +407,60 @@ function DollarBill({
 
   const fallingClass = isFalling ? "bill-falling" : "";
 
+  if (variant === "halfFolded") {
+    // Bill folded in half (wallet fold) — half the normal width, fold edge on
+    // the right side with a thicker dark spine and a small thickness shadow.
+    const w = Math.round(baseW / 2) + 2; // ~40px (the visible front face)
+    const h = baseH; // 32
+    // Pick which side hosts the fold spine deterministically (left or right).
+    const foldRight = index % 2 === 0;
+    return (
+      <div className={fallingClass} style={{ ...sharedShell, width: `${w}px`, height: `${h}px` }}>
+        <div
+          className="absolute"
+          style={{
+            inset: 0,
+            ...billSurface,
+            overflow: "hidden",
+            // Extra shadow under the fold edge to hint at the doubled paper thickness.
+            boxShadow: `${billSurface.boxShadow}, ${
+              foldRight
+                ? "inset -3px 0 4px -2px var(--bill-crease)"
+                : "inset 3px 0 4px -2px var(--bill-crease)"
+            }`,
+          }}
+        >
+          <BillFace width={w} height={h} compact />
+          {/* Crisp fold spine on one edge */}
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              [foldRight ? "right" : "left"]: 0,
+              width: "2px",
+              background: "var(--bill-crease-strong)",
+              boxShadow: foldRight
+                ? "-1px 0 0 var(--bill-highlight)"
+                : "1px 0 0 var(--bill-highlight)",
+            }}
+          />
+          {/* Thin sliver of the back side peeking out behind the fold */}
+          <div
+            className="absolute"
+            style={{
+              [foldRight ? "right" : "left"]: "-2px",
+              top: "1px",
+              bottom: "1px",
+              width: "2px",
+              background: "var(--bill-bg-edge)",
+              borderRadius: "1px",
+              opacity: 0.7,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (variant === "foldedH") {
     // Folded along the long axis — short, with strong dark crease and shadow on lower half.
     const w = baseW; // 75
@@ -533,9 +592,9 @@ function DollarBill({
   }
 
   if (variant === "rolled") {
-    // Tightly rolled-up bill — a long thin vertical cylinder/tube.
-    const w = 13;
-    const h = 38;
+    // Tightly rolled-up bill — a thicker vertical cylinder/tube.
+    const w = 20;
+    const h = 44;
     const extraRot = (((index * 13) % 51) - 25); // ±25°
     const totalRot = baseRotation + extraRot;
     return (
@@ -684,8 +743,6 @@ function Jar({
   onReset: () => void;
 }) {
   const config = JAR_CONFIG[name];
-  const maxFill = 100;
-  const fillPercent = Math.min((total / maxFill) * 100, 100);
   const [animate, setAnimate] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
@@ -710,7 +767,7 @@ function Jar({
     onAdd();
     // Keep the flag set for the full bill-drop duration (600ms) so the
     // newest-bill falling animation completes before isFalling flips back.
-    setTimeout(() => setAnimate(false), 650);
+    setTimeout(() => setAnimate(false), 550);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -773,16 +830,6 @@ function Jar({
             className="absolute top-0 left-2 w-3 h-full opacity-30 rounded-full"
             style={{
               background: "linear-gradient(to right, white, transparent)",
-            }}
-          />
-
-          {/* Fill level - faint tinted backdrop */}
-          <div
-            className="absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out pointer-events-none"
-            style={{
-              height: `${fillPercent}%`,
-              background: config.fillColor,
-              borderRadius: "0 0 22px 22px",
             }}
           />
 
