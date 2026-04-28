@@ -681,7 +681,7 @@ function SettingsModal({
                           className="text-[10px] uppercase tracking-wider font-bold shrink-0"
                           style={{ color: jarColor }}
                         >
-                          {s.jar_name === "caveats" ? "Caveats" : "Good Girl"}
+                          {JAR_CONFIG[s.jar_name].label.replace(/\s*Jar$/, "")}
                         </span>
                         <span
                           className="flex-1 min-w-0 truncate"
