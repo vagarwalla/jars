@@ -13,6 +13,14 @@ type Suggestion = {
   voters: string[];
 };
 
+type Addition = {
+  id: number;
+  jar_name: JarName;
+  amount: number;
+  added_by: string | null;
+  created_at: string;
+};
+
 function renderWithLinks(text: string): React.ReactNode[] {
   // Matches: https://… , http://… , www.… , and bare domains like
   // foo.com or sub.foo.io/path. Word-bounded so it won't mid-match.
@@ -1170,12 +1178,16 @@ function SettingsModal({
   onUserAdded,
   suggestions,
   onSuggestionsChanged,
+  users,
+  onAdditionsChanged,
 }: {
   open: boolean;
   onClose: () => void;
   onUserAdded: (name: string) => void;
   suggestions: Suggestion[];
   onSuggestionsChanged: () => void;
+  users: string[];
+  onAdditionsChanged: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [unlocked, setUnlocked] = useState(false);
@@ -1188,6 +1200,29 @@ function SettingsModal({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [additions, setAdditions] = useState<Addition[]>([]);
+  const [additionsLoading, setAdditionsLoading] = useState(false);
+  const [additionsError, setAdditionsError] = useState<string | null>(null);
+  const [mutatingAdditionId, setMutatingAdditionId] = useState<number | null>(null);
+
+  const loadAdditions = useCallback(
+    async (pw: string) => {
+      setAdditionsLoading(true);
+      setAdditionsError(null);
+      const res = await fetch("/api/jars/additions", {
+        headers: { "x-settings-password": pw },
+      });
+      setAdditionsLoading(false);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setAdditionsError(j.error ?? `Error (${res.status})`);
+        return;
+      }
+      const data = await res.json();
+      setAdditions(data.additions ?? []);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!open) {
@@ -1202,8 +1237,52 @@ function SettingsModal({
       setEditingId(null);
       setEditDraft("");
       setSavingEdit(false);
+      setAdditions([]);
+      setAdditionsLoading(false);
+      setAdditionsError(null);
+      setMutatingAdditionId(null);
     }
   }, [open]);
+
+  const reassignAddition = async (id: number, added_by: string) => {
+    setMutatingAdditionId(id);
+    setAdditionsError(null);
+    const res = await fetch("/api/jars/additions", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-settings-password": password,
+      },
+      body: JSON.stringify({ id, added_by }),
+    });
+    setMutatingAdditionId(null);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setAdditionsError(j.error ?? `Error (${res.status})`);
+      return;
+    }
+    setAdditions((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, added_by } : a))
+    );
+    onAdditionsChanged();
+  };
+
+  const deleteAddition = async (id: number) => {
+    setMutatingAdditionId(id);
+    setAdditionsError(null);
+    const res = await fetch(`/api/jars/additions?id=${id}`, {
+      method: "DELETE",
+      headers: { "x-settings-password": password },
+    });
+    setMutatingAdditionId(null);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setAdditionsError(j.error ?? `Error (${res.status})`);
+      return;
+    }
+    setAdditions((prev) => prev.filter((a) => a.id !== id));
+    onAdditionsChanged();
+  };
 
   const deleteSuggestion = async (id: number) => {
     setDeletingId(id);
@@ -1286,6 +1365,7 @@ function SettingsModal({
       return;
     }
     setUnlocked(true);
+    loadAdditions(password);
   };
 
   const submitName = async (e: React.FormEvent) => {
@@ -1572,6 +1652,118 @@ function SettingsModal({
                 </p>
               )}
             </div>
+
+            <div className="flex flex-col gap-2">
+              <label
+                className="text-xs uppercase tracking-wider"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Manage additions
+              </label>
+              {additionsLoading ? (
+                <p
+                  className="text-xs italic"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Loading…
+                </p>
+              ) : additions.length === 0 ? (
+                <p
+                  className="text-xs italic"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  No additions yet.
+                </p>
+              ) : (
+                <ul
+                  className="flex flex-col divide-y max-h-64 overflow-y-auto rounded-md"
+                  style={{
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--jar-glass-border)",
+                  }}
+                >
+                  {additions.map((a) => {
+                    const jarColor = JAR_CONFIG[a.jar_name].color;
+                    const busy = mutatingAdditionId === a.id;
+                    const date = new Date(a.created_at).toLocaleDateString(
+                      undefined,
+                      { month: "short", day: "numeric" }
+                    );
+                    return (
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-2 px-3 py-2 text-sm"
+                      >
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-bold shrink-0"
+                          style={{ color: jarColor }}
+                          title={JAR_CONFIG[a.jar_name].label}
+                        >
+                          {JAR_CONFIG[a.jar_name].label.replace(/\s*Jar$/, "")}
+                        </span>
+                        <span
+                          className="text-xs tabular-nums shrink-0"
+                          style={{ color: "var(--text)" }}
+                        >
+                          ${a.amount}
+                        </span>
+                        <span
+                          className="text-[10px] tabular-nums shrink-0"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          {date}
+                        </span>
+                        <select
+                          value={a.added_by ?? ""}
+                          disabled={busy}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            if (next && next !== a.added_by) {
+                              reassignAddition(a.id, next);
+                            }
+                          }}
+                          className="flex-1 min-w-0 rounded-md px-2 py-1 text-xs outline-none"
+                          style={{
+                            background: "var(--bg)",
+                            color: "var(--text)",
+                            border: "1px solid var(--jar-glass-border)",
+                          }}
+                        >
+                          {!a.added_by && <option value="">— unset —</option>}
+                          {a.added_by && !users.includes(a.added_by) && (
+                            <option value={a.added_by}>{a.added_by}</option>
+                          )}
+                          {users.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => deleteAddition(a.id)}
+                          disabled={busy}
+                          aria-label="Delete addition"
+                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none transition-opacity disabled:opacity-50"
+                          style={{
+                            background: "var(--bg)",
+                            color: "var(--accent-pink)",
+                            border: `1px solid ${JAR_CONFIG.caveats.fillColor}`,
+                          }}
+                        >
+                          {busy ? "…" : "×"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {additionsError && (
+                <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
+                  {additionsError}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1755,6 +1947,8 @@ export default function Home() {
         }}
         suggestions={suggestions}
         onSuggestionsChanged={fetchSuggestions}
+        users={users}
+        onAdditionsChanged={fetchTotals}
       />
 
       <h1

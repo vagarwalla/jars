@@ -15,7 +15,7 @@ A simple web app with two money jars: "Caveats / Apology Jar" and "Boss Bitch Ja
 - Global state — no auth, one shared set of jars for everyone
 - User selector tracks who added each dollar; default users are Lily, Jana, Vaidehi; selection persisted in localStorage. Additional names can be added from a password-protected settings modal (gear icon, top right)
 - All additions are logged individually for future analytics (amount, date, jar, added_by)
-- Reset is hidden: triple-click the barely-visible "reset" text below each jar
+- Reset is hidden: triple-click the barely-visible "reset" text below each jar; password-gated settings modal also exposes a per-row management list (reassign `added_by`, delete individual additions)
 - Mason jar visual fills up as money is added (100% full at $100)
 - Light/dark mode with theme toggle, preference stored in localStorage
 
@@ -35,15 +35,16 @@ CREATE TABLE jar_users (
   created_at timestamptz not null default now()
 );
 ```
-RLS enabled with public read/insert/delete policies for anon role on `jar_additions`, and public read/insert on `jar_users`.
+RLS enabled with public read/insert/delete policies for anon role on `jar_additions` plus an admin UPDATE policy (gated at the API layer by `SETTINGS_PASSWORD`), and public read/insert on `jar_users`.
 
 ## Environment Variables
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key
-- `SETTINGS_PASSWORD` — gates `POST /api/users` (header `x-settings-password`); set in keychain as `jars-settings-password`
+- `SETTINGS_PASSWORD` — gates `POST /api/users`, `PATCH/DELETE /api/suggestions`, and `GET/PATCH/DELETE /api/jars/additions` (header `x-settings-password`); set in keychain as `jars-settings-password`
 
 ## File Structure
 - `src/app/page.tsx` — Main UI with jar components, theme toggle, settings modal
-- `src/app/api/jars/route.ts` — GET (totals), POST (add), DELETE (reset) endpoints
+- `src/app/api/jars/route.ts` — GET (totals), POST (add), DELETE (reset entire jar) endpoints
+- `src/app/api/jars/additions/route.ts` — GET/PATCH/DELETE for individual addition rows (all password-gated)
 - `src/app/api/users/route.ts` — GET (list users), POST (add user, password-gated)
 - `src/lib/supabase.ts` — Supabase client singleton

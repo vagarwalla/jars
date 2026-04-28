@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-28 — Manage individual jar additions in settings
+- Settings modal now lists every `jar_additions` row with a dropdown to reassign `added_by` and a delete button per row — no more dropping into Supabase to fix a misclick
+- New `GET/PATCH/DELETE /api/jars/additions` (all gated by `SETTINGS_PASSWORD` header); PATCH validates `added_by` against `jar_users`, supports optional `jar_name` change
+- New migration `20260428030000_jar_additions_admin_update.sql` adds an RLS UPDATE policy on `jar_additions` so the PATCH actually persists
+
 ## 2026-04-28 — Clickable links + edit suggestions in settings
 - URLs in the public suggestions list now render as clickable links (open in new tab); detects `https://`, `http://`, `www.`, and bare domains like `example.com/path`
 - Password-gated suggestion management modal now supports editing the text in addition to deleting
