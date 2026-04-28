@@ -25,15 +25,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { jar_name, amount } = body;
+  const { jar_name, amount, added_by } = body;
 
   if (!["caveats", "good_girl"].includes(jar_name)) {
     return Response.json({ error: "Invalid jar name" }, { status: 400 });
   }
 
+  if (!added_by || !["Lily", "Jana", "Vaidehi"].includes(added_by)) {
+    return Response.json({ error: "Invalid user" }, { status: 400 });
+  }
+
   const { error } = await supabase
     .from("jar_additions")
-    .insert({ jar_name, amount: amount ?? 1 });
+    .insert({ jar_name, amount: amount ?? 1, added_by });
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });

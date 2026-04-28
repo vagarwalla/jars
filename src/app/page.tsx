@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 
 type JarName = "caveats" | "good_girl";
+type UserName = "Lily" | "Jana" | "Vaidehi";
+const USERS: UserName[] = ["Lily", "Jana", "Vaidehi"];
 
 const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: string }> = {
   caveats: {
@@ -211,12 +213,48 @@ function ThemeToggle() {
   );
 }
 
+function UserSelector({
+  selected,
+  onSelect,
+}: {
+  selected: UserName | null;
+  onSelect: (name: UserName) => void;
+}) {
+  return (
+    <div className="flex gap-3">
+      {USERS.map((name) => (
+        <button
+          key={name}
+          onClick={() => onSelect(name)}
+          className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+          style={{
+            background:
+              selected === name ? "var(--accent-pink)" : "var(--bg-secondary)",
+            color: selected === name ? "white" : "var(--text-muted)",
+            boxShadow:
+              selected === name ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
+            transform: selected === name ? "scale(1.05)" : "scale(1)",
+          }}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   const [totals, setTotals] = useState<Record<JarName, number>>({
     caveats: 0,
     good_girl: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [activeUser, setActiveUser] = useState<UserName | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("jarUser") as UserName | null;
+    if (stored && USERS.includes(stored)) setActiveUser(stored);
+  }, []);
 
   const fetchTotals = useCallback(async () => {
     const res = await fetch("/api/jars");
@@ -231,12 +269,18 @@ export default function Home() {
     fetchTotals();
   }, [fetchTotals]);
 
+  const selectUser = (name: UserName) => {
+    setActiveUser(name);
+    localStorage.setItem("jarUser", name);
+  };
+
   const addToJar = async (jar: JarName) => {
+    if (!activeUser) return;
     setTotals((prev) => ({ ...prev, [jar]: prev[jar] + 1 }));
     await fetch("/api/jars", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jar_name: jar, amount: 1 }),
+      body: JSON.stringify({ jar_name: jar, amount: 1, added_by: activeUser }),
     });
     fetchTotals();
   };
@@ -279,7 +323,20 @@ export default function Home() {
         The Jars
       </h1>
 
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-16">
+      <div className="flex flex-col items-center gap-2">
+        <span
+          className="text-xs uppercase tracking-wider"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Who&apos;s adding?
+        </span>
+        <UserSelector selected={activeUser} onSelect={selectUser} />
+      </div>
+
+      <div
+        className="flex flex-col sm:flex-row items-center sm:items-start gap-16"
+        style={{ opacity: activeUser ? 1 : 0.4, pointerEvents: activeUser ? "auto" : "none" }}
+      >
         <Jar
           name="caveats"
           total={totals.caveats}

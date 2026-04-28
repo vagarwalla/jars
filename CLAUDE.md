@@ -11,7 +11,8 @@ A simple web app with two money jars: "Caveats / Apology Jar" and "Good Girl Jar
 ## Key Decisions
 - $1 per click (fixed amount)
 - Global state — no auth, one shared set of jars for everyone
-- All additions are logged individually for future analytics (amount, date, jar)
+- User selector (Lily, Jana, Vaidehi) tracks who added each dollar, persisted in localStorage
+- All additions are logged individually for future analytics (amount, date, jar, added_by)
 - Reset is hidden: triple-click the barely-visible "reset" text below each jar
 - Mason jar visual fills up as money is added (100% full at $100)
 - Light/dark mode with theme toggle, preference stored in localStorage
@@ -22,6 +23,7 @@ CREATE TABLE jar_additions (
   id bigint generated always as identity primary key,
   jar_name text not null check (jar_name in ('caveats', 'good_girl')),
   amount integer not null default 1,
+  added_by text,
   created_at timestamptz not null default now()
 );
 ```
