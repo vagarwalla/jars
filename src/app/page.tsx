@@ -60,16 +60,21 @@ function renderWithLinks(text: string): React.ReactNode[] {
   return nodes.length ? nodes : [text];
 }
 
-const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: string }> = {
+const JAR_CONFIG: Record<
+  JarName,
+  { label: string; color: string; fillColor: string; destination: string }
+> = {
   caveats: {
     label: "Caveats / Apology Jar",
     color: "var(--accent-pink)",
     fillColor: "rgba(255, 107, 61, 0.55)",
+    destination: "→ Cringe Charity TBD",
   },
   good_girl: {
     label: "Boss Bitch Jar",
     color: "var(--accent-green)",
     fillColor: "rgba(16, 196, 168, 0.55)",
+    destination: "→ Gals Night Out",
   },
 };
 
@@ -240,6 +245,12 @@ function Jar({
         >
           ${total}
         </span>
+        <div
+          className="text-xs italic mt-1"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {config.destination}
+        </div>
       </div>
 
       <button
@@ -1094,7 +1105,7 @@ export default function Home() {
 
       <div
         className="flex flex-col sm:flex-row items-center sm:items-start gap-16"
-        style={{ opacity: activeUser ? 1 : 0.4 }}
+        style={{ opacity: activeUser ? 1 : 0.75 }}
       >
         <div className="flex flex-col items-center gap-6">
           <div style={{ pointerEvents: activeUser ? "auto" : "none" }}>
