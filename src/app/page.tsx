@@ -34,11 +34,18 @@ function Jar({
   const maxFill = 100;
   const fillPercent = Math.min((total / maxFill) * 100, 100);
   const [animate, setAnimate] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [cursor, setCursor] = useState({ x: 0, y: 0 });
 
   const handleClick = () => {
     setAnimate(true);
     onAdd();
     setTimeout(() => setAnimate(false), 400);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setCursor({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
   return (
@@ -52,7 +59,10 @@ function Jar({
 
       <button
         onClick={handleClick}
-        className="relative cursor-pointer transition-transform active:scale-95 focus:outline-none group"
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        onMouseMove={handleMouseMove}
+        className="relative cursor-pointer transition-transform active:scale-95 focus:outline-none"
         aria-label={`Add $1 to ${config.label}`}
       >
         {/* Lid */}
@@ -138,13 +148,34 @@ function Jar({
               +$1
             </div>
           )}
+
         </div>
 
+        {/* Cursor-following tooltip */}
         <div
-          className="absolute -bottom-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs whitespace-nowrap"
-          style={{ color: "var(--text-muted)" }}
+          className="absolute pointer-events-none transition-opacity duration-150"
+          style={{
+            left: cursor.x,
+            top: cursor.y,
+            transform: "translate(14px, 14px)",
+            opacity: hovering && !animate ? 1 : 0,
+            zIndex: 20,
+          }}
         >
-          click to add $1
+          <div
+            className="px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap"
+            style={{
+              background: "var(--bg)",
+              color: config.color,
+              border: `1px solid ${config.fillColor}`,
+              boxShadow:
+                "0 6px 16px var(--shadow), 0 2px 4px var(--shadow)",
+              fontFamily: "system-ui, -apple-system, sans-serif",
+              letterSpacing: "0.02em",
+            }}
+          >
+            + click to add $1
+          </div>
         </div>
       </button>
 
