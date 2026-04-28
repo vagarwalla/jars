@@ -20,7 +20,7 @@ const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: str
     fillColor: "rgba(255, 107, 61, 0.55)",
   },
   good_girl: {
-    label: "Good Girl Jar",
+    label: "Boss Bitch Jar",
     color: "var(--accent-green)",
     fillColor: "rgba(16, 196, 168, 0.55)",
   },

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-04-28 — Rename "Good Girl Jar" to "Boss Bitch Jar"
+- Display label only; internal `good_girl` key preserved so existing rows in `jar_additions` and `jar_suggestions` keep working
+
 ## 2026-04-28 — Add custom user names via password-protected settings
 - New `jar_users` Supabase table; user list now loaded dynamically (seeded with Lily, Jana, Vaidehi)
 - New `/api/users` GET (list) + POST (add, gated by `SETTINGS_PASSWORD` header)

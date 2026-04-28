@@ -1,6 +1,6 @@
 # Jars - jars.vaidehiagarwalla.com
 
-A simple web app with two money jars: "Caveats / Apology Jar" and "Good Girl Jar". Click to add $1 to either jar.
+A simple web app with two money jars: "Caveats / Apology Jar" and "Boss Bitch Jar" (internal key: `good_girl`). Click to add $1 to either jar.
 
 ## Architecture
 - **Framework**: Next.js (App Router) with TypeScript + Tailwind CSS
