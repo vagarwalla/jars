@@ -10,12 +10,12 @@ const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: str
   caveats: {
     label: "Caveats / Apology Jar",
     color: "var(--accent-pink)",
-    fillColor: "rgba(232, 160, 191, 0.5)",
+    fillColor: "rgba(255, 107, 61, 0.55)",
   },
   good_girl: {
     label: "Good Girl Jar",
     color: "var(--accent-green)",
-    fillColor: "rgba(168, 213, 186, 0.5)",
+    fillColor: "rgba(16, 196, 168, 0.55)",
   },
 };
 
@@ -229,7 +229,7 @@ function UserSelector({
           className="px-4 py-2 rounded-full text-sm font-medium transition-all"
           style={{
             background:
-              selected === name ? "var(--accent-pink)" : "var(--bg-secondary)",
+              selected === name ? "var(--accent-violet)" : "var(--bg-secondary)",
             color: selected === name ? "white" : "var(--text-muted)",
             boxShadow:
               selected === name ? "0 2px 8px rgba(0,0,0,0.15)" : "none",

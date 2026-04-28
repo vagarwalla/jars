@@ -1,31 +1,33 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #faf8f5;
-  --bg-secondary: #f0ece6;
-  --text: #2d2926;
-  --text-muted: #8a8278;
-  --accent-pink: #e8a0bf;
-  --accent-green: #a8d5ba;
-  --jar-glass: rgba(200, 220, 240, 0.25);
-  --jar-glass-border: rgba(160, 190, 220, 0.4);
-  --jar-lid: #c4b5a0;
-  --jar-lid-dark: #a89880;
-  --shadow: rgba(0, 0, 0, 0.06);
+  --bg: #fff8ec;
+  --bg-secondary: #f5ecd8;
+  --text: #1f1d1a;
+  --text-muted: #8a7f70;
+  --accent-pink: #ff6b3d;
+  --accent-green: #10c4a8;
+  --accent-violet: #7c5cff;
+  --jar-glass: rgba(200, 220, 240, 0.22);
+  --jar-glass-border: rgba(140, 170, 200, 0.45);
+  --jar-lid: #2d2926;
+  --jar-lid-dark: #14110f;
+  --shadow: rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="dark"] {
-  --bg: #1a1816;
-  --bg-secondary: #252220;
-  --text: #e8e2da;
-  --text-muted: #8a8278;
-  --accent-pink: #d4789e;
-  --accent-green: #7ab892;
+  --bg: #14130f;
+  --bg-secondary: #211e18;
+  --text: #f3ead8;
+  --text-muted: #8a7f70;
+  --accent-pink: #ff7a52;
+  --accent-green: #2ee0c0;
+  --accent-violet: #9b82ff;
   --jar-glass: rgba(150, 180, 210, 0.12);
-  --jar-glass-border: rgba(120, 150, 180, 0.25);
-  --jar-lid: #6b5f50;
-  --jar-lid-dark: #534838;
-  --shadow: rgba(0, 0, 0, 0.2);
+  --jar-glass-border: rgba(120, 150, 180, 0.28);
+  --jar-lid: #d4c8b0;
+  --jar-lid-dark: #a89a7c;
+  --shadow: rgba(0, 0, 0, 0.3);
 }
 
 @theme inline {
@@ -35,6 +37,7 @@
   --color-text-muted: var(--text-muted);
   --color-accent-pink: var(--accent-pink);
   --color-accent-green: var(--accent-green);
+  --color-accent-violet: var(--accent-violet);
   --color-jar-glass: var(--jar-glass);
   --color-jar-glass-border: var(--jar-glass-border);
   --color-jar-lid: var(--jar-lid);
