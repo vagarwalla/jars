@@ -14,7 +14,10 @@ type Suggestion = {
 };
 
 function renderWithLinks(text: string): React.ReactNode[] {
-  const regex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  // Matches: https://… , http://… , www.… , and bare domains like
+  // foo.com or sub.foo.io/path. Word-bounded so it won't mid-match.
+  const regex =
+    /\b(https?:\/\/[^\s]+|www\.[^\s]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(?:\/[^\s]*)?)/gi;
   const trailingPunct = /[.,;:!?)\]}'"]+$/;
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -31,7 +34,11 @@ function renderWithLinks(text: string): React.ReactNode[] {
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
     }
-    const href = url.toLowerCase().startsWith("www.") ? `https://${url}` : url;
+    const lower = url.toLowerCase();
+    const href =
+      lower.startsWith("http://") || lower.startsWith("https://")
+        ? url
+        : `https://${url}`;
     nodes.push(
       <a
         key={key++}
