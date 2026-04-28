@@ -73,7 +73,7 @@ const JAR_CONFIG: Record<
     label: "Caveats / Apology Jar",
     color: "var(--accent-pink)",
     fillColor: "rgba(255, 107, 61, 0.55)",
-    destination: "→ Cringe Charity TBD",
+    destination: "→ Cringe Charity",
   },
   good_girl: {
     label: "Boss Bitch Jar",
