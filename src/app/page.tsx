@@ -3,8 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 
 type JarName = "caveats" | "good_girl";
-type UserName = "Lily" | "Jana" | "Vaidehi";
-const USERS: UserName[] = ["Lily", "Jana", "Vaidehi"];
 
 type Suggestion = {
   id: number;
@@ -19,12 +17,12 @@ const JAR_CONFIG: Record<JarName, { label: string; color: string; fillColor: str
   caveats: {
     label: "Caveats / Apology Jar",
     color: "var(--accent-pink)",
-    fillColor: "rgba(232, 160, 191, 0.5)",
+    fillColor: "rgba(255, 107, 61, 0.55)",
   },
   good_girl: {
     label: "Good Girl Jar",
     color: "var(--accent-green)",
-    fillColor: "rgba(168, 213, 186, 0.5)",
+    fillColor: "rgba(16, 196, 168, 0.55)",
   },
 };
 
@@ -60,7 +58,7 @@ function Jar({
   return (
     <div className="flex flex-col items-center gap-4">
       <h2
-        className="text-lg font-medium tracking-wide"
+        className="text-xl font-bold tracking-tight"
         style={{ color: config.color }}
       >
         {config.label}
@@ -190,7 +188,7 @@ function Jar({
 
       <div className="text-center">
         <span
-          className="text-3xl font-semibold tabular-nums"
+          className="text-4xl font-bold tabular-nums"
           style={{ color: config.color }}
         >
           ${total}
@@ -220,7 +218,7 @@ function SuggestionsPanel({
 }: {
   jar: JarName;
   suggestions: Suggestion[];
-  activeUser: UserName | null;
+  activeUser: string | null;
   onAdd: (text: string) => Promise<void>;
   onToggleVote: (id: number) => Promise<void>;
 }) {
@@ -421,24 +419,234 @@ function ThemeToggle() {
   );
 }
 
+function SettingsButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="fixed top-4 right-14 w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+      style={{ background: "var(--bg-secondary)", color: "var(--text-muted)" }}
+      aria-label="Open settings"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    </button>
+  );
+}
+
+function SettingsModal({
+  open,
+  onClose,
+  onUserAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onUserAdded: (name: string) => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setPassword("");
+      setUnlocked(false);
+      setName("");
+      setError(null);
+      setBusy(false);
+      setJustAdded(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const tryUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    // Probe with an empty payload — server returns 401 on bad password,
+    // 400 on a missing/invalid name when the password is correct.
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-settings-password": password,
+      },
+      body: JSON.stringify({}),
+    });
+    setBusy(false);
+    if (res.status === 401) {
+      setError("Wrong password");
+      return;
+    }
+    if (res.status === 500) {
+      const j = await res.json().catch(() => ({}));
+      setError(j.error ?? "Server error");
+      return;
+    }
+    setUnlocked(true);
+  };
+
+  const submitName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Enter a name");
+      return;
+    }
+    setBusy(true);
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-settings-password": password,
+      },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setError(j.error ?? `Error (${res.status})`);
+      return;
+    }
+    onUserAdded(trimmed);
+    setJustAdded(trimmed);
+    setName("");
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.4)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 shadow-xl"
+        style={{ background: "var(--bg)", border: "1px solid var(--jar-glass-border)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2
+            className="text-sm uppercase tracking-widest"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Settings
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-xl leading-none"
+            style={{ color: "var(--text-muted)" }}
+            aria-label="Close settings"
+          >
+            ×
+          </button>
+        </div>
+
+        {!unlocked ? (
+          <form onSubmit={tryUnlock} className="flex flex-col gap-3">
+            <label
+              className="text-xs uppercase tracking-wider"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Password
+            </label>
+            <input
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-md px-3 py-2 outline-none"
+              style={{
+                background: "var(--bg-secondary)",
+                color: "var(--text)",
+                border: "1px solid var(--jar-glass-border)",
+              }}
+            />
+            {error && (
+              <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={busy || !password}
+              className="rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+              style={{ background: "var(--accent-pink)", color: "white" }}
+            >
+              {busy ? "Checking..." : "Unlock"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={submitName} className="flex flex-col gap-3">
+            <label
+              className="text-xs uppercase tracking-wider"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Add a name
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Sam"
+              className="rounded-md px-3 py-2 outline-none"
+              style={{
+                background: "var(--bg-secondary)",
+                color: "var(--text)",
+                border: "1px solid var(--jar-glass-border)",
+              }}
+            />
+            {error && (
+              <p className="text-xs" style={{ color: "var(--accent-pink)" }}>
+                {error}
+              </p>
+            )}
+            {justAdded && !error && (
+              <p className="text-xs" style={{ color: "var(--accent-green)" }}>
+                Added “{justAdded}”. Add another or close.
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={busy || !name.trim()}
+              className="rounded-md px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+              style={{ background: "var(--accent-green)", color: "white" }}
+            >
+              {busy ? "Adding..." : "Add"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UserSelector({
+  users,
   selected,
   onSelect,
 }: {
-  selected: UserName | null;
-  onSelect: (name: UserName) => void;
+  users: string[];
+  selected: string | null;
+  onSelect: (name: string) => void;
 }) {
   return (
-    <div className="flex gap-3">
-      {USERS.map((name) => (
+    <div className="flex gap-3 flex-wrap justify-center">
+      {users.map((name) => (
         <button
           key={name}
           onClick={() => onSelect(name)}
-          className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+          className="px-4 py-2 rounded-full text-sm font-bold transition-all"
           style={{
             background:
-              selected === name ? "var(--accent-pink)" : "var(--bg-secondary)",
-            color: selected === name ? "white" : "var(--text-muted)",
+              selected === name ? "var(--accent-violet)" : "var(--bg-secondary)",
+            color: selected === name ? "white" : "var(--text)",
             boxShadow:
               selected === name ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
             transform: selected === name ? "scale(1.05)" : "scale(1)",
@@ -458,11 +666,18 @@ export default function Home() {
   });
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeUser, setActiveUser] = useState<UserName | null>(null);
+  const [users, setUsers] = useState<string[]>([]);
+  const [activeUser, setActiveUser] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("jarUser") as UserName | null;
-    if (stored && USERS.includes(stored)) setActiveUser(stored);
+  const fetchUsers = useCallback(async () => {
+    const res = await fetch("/api/users");
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(data.users ?? []);
+      return (data.users ?? []) as string[];
+    }
+    return [] as string[];
   }, []);
 
   const fetchTotals = useCallback(async () => {
@@ -471,7 +686,6 @@ export default function Home() {
       const data = await res.json();
       setTotals(data);
     }
-    setLoading(false);
   }, []);
 
   const fetchSuggestions = useCallback(async () => {
@@ -483,11 +697,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchTotals();
-    fetchSuggestions();
-  }, [fetchTotals, fetchSuggestions]);
+    (async () => {
+      const list = await fetchUsers();
+      const stored = localStorage.getItem("jarUser");
+      if (stored && list.includes(stored)) setActiveUser(stored);
+      await Promise.all([fetchTotals(), fetchSuggestions()]);
+      setLoading(false);
+    })();
+  }, [fetchUsers, fetchTotals, fetchSuggestions]);
 
-  const selectUser = (name: UserName) => {
+  const selectUser = (name: string) => {
     setActiveUser(name);
     localStorage.setItem("jarUser", name);
   };
@@ -575,22 +794,30 @@ export default function Home() {
       style={{ background: "var(--bg)" }}
     >
       <ThemeToggle />
+      <SettingsButton onOpen={() => setSettingsOpen(true)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onUserAdded={() => {
+          fetchUsers();
+        }}
+      />
 
       <h1
-        className="text-2xl font-light tracking-widest uppercase"
-        style={{ color: "var(--text-muted)" }}
+        className="text-4xl font-bold tracking-tight uppercase"
+        style={{ color: "var(--text)" }}
       >
         The Jars
       </h1>
 
       <div className="flex flex-col items-center gap-2">
         <span
-          className="text-xs uppercase tracking-wider"
-          style={{ color: "var(--text-muted)" }}
+          className="text-xs font-bold uppercase tracking-widest"
+          style={{ color: "var(--text)" }}
         >
           Who did it?
         </span>
-        <UserSelector selected={activeUser} onSelect={selectUser} />
+        <UserSelector users={users} selected={activeUser} onSelect={selectUser} />
       </div>
 
       <div

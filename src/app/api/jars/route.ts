@@ -31,7 +31,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid jar name" }, { status: 400 });
   }
 
-  if (!added_by || !["Lily", "Jana", "Vaidehi"].includes(added_by)) {
+  if (!added_by || typeof added_by !== "string") {
+    return Response.json({ error: "Invalid user" }, { status: 400 });
+  }
+
+  const { data: userRow, error: userErr } = await supabase
+    .from("jar_users")
+    .select("name")
+    .eq("name", added_by)
+    .maybeSingle();
+
+  if (userErr) {
+    return Response.json({ error: userErr.message }, { status: 500 });
+  }
+  if (!userRow) {
     return Response.json({ error: "Invalid user" }, { status: 400 });
   }
 

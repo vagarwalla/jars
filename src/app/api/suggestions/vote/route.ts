@@ -5,8 +5,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const USERS = ["Lily", "Jana", "Vaidehi"] as const;
-
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const suggestion_id = Number(body?.suggestion_id);
@@ -15,7 +13,16 @@ export async function POST(request: Request) {
   if (!Number.isInteger(suggestion_id) || suggestion_id <= 0) {
     return Response.json({ error: "Invalid suggestion id" }, { status: 400 });
   }
-  if (!voter || !USERS.includes(voter)) {
+  if (!voter || typeof voter !== "string") {
+    return Response.json({ error: "Invalid voter" }, { status: 400 });
+  }
+
+  const { data: userRow } = await supabase
+    .from("jar_users")
+    .select("name")
+    .eq("name", voter)
+    .maybeSingle();
+  if (!userRow) {
     return Response.json({ error: "Invalid voter" }, { status: 400 });
   }
 

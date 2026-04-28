@@ -6,8 +6,16 @@ const supabase = createClient(
 );
 
 const JARS = ["caveats", "good_girl"] as const;
-const USERS = ["Lily", "Jana", "Vaidehi"] as const;
 const SUGGESTION_PATTERN = /^[\p{L}\p{N}\p{M}\p{P}\p{Zs}]{1,80}$/u;
+
+async function isKnownUser(name: string) {
+  const { data } = await supabase
+    .from("jar_users")
+    .select("name")
+    .eq("name", name)
+    .maybeSingle();
+  return Boolean(data);
+}
 
 export async function GET() {
   const [suggestionsRes, votesRes] = await Promise.all([
@@ -53,7 +61,7 @@ export async function POST(request: Request) {
   if (!JARS.includes(jar_name)) {
     return Response.json({ error: "Invalid jar name" }, { status: 400 });
   }
-  if (!suggested_by || !USERS.includes(suggested_by)) {
+  if (!suggested_by || typeof suggested_by !== "string" || !(await isKnownUser(suggested_by))) {
     return Response.json({ error: "Invalid user" }, { status: 400 });
   }
   if (!rawSuggestion || !SUGGESTION_PATTERN.test(rawSuggestion)) {
